@@ -364,6 +364,12 @@ to something similar to "http://domain/#channel/2011-03-09 14:25:09", or
     This option is more or less identical to `channel_conditions`, except that it is used
     to filter notifications for private messages.
 
+*   `bind_host = ""`
+
+    This option allows setting a network address to bind to for the module's outgoing
+    connections, overwriting the one specified in the ZNC config. Its value can be a
+    machine name such as "znc.somehost.tld", or a dotted number such as "123.12.13.23".
+
 *   `debug = "off"`
 
     When set to "on", this option enables debug output for various features, and is useful

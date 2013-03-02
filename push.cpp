@@ -39,6 +39,8 @@ class CPushSocket : public CSocket
 		}
 
 		// Implemented after CPushMod
+		using Csock::Connect;
+		bool Connect(const CString& sHostname, unsigned short uPort, bool bSSL, CString sBindHost, unsigned int uTimeout = 60);
 		void Request(bool post, const CString& host, const CString& url, MCString& parameters, const CString& auth="");
 		virtual void ReadLine(const CString& data);
 		virtual void Disconnected();
@@ -131,6 +133,7 @@ class CPushMod : public CModule
             // Advanced
 			defaults["channel_conditions"] = "all";
 			defaults["query_conditions"] = "all";
+			defaults["bind_host"] = "";
 			defaults["debug"] = "off";
 		}
 		virtual ~CPushMod() {}
@@ -223,6 +226,7 @@ class CPushMod : public CModule
 			bool use_post = true;
 			int use_port = 443;
 			bool use_ssl = true;
+			CString use_bindhost = options["bind_host"];
 			CString service_host;
 			CString service_url;
 			CString service_auth;
@@ -434,7 +438,7 @@ class CPushMod : public CModule
 
 			// Create the socket connection, write to it, and add it to the queue
 			CPushSocket *sock = new CPushSocket(this);
-			sock->Connect(service_host, use_port, use_ssl);
+			sock->Connect(service_host, use_port, use_ssl, use_bindhost);
 			sock->Request(use_post, service_host, service_url, params, service_auth);
 			AddSocket(sock);
 		}
@@ -1345,6 +1349,7 @@ class CPushMod : public CModule
 				bool use_post = true;
 				int use_port = 443;
 				bool use_ssl = true;
+				CString use_bindhost = options["bind_host"];
 				CString service_host;
 				CString service_url;
 				CString service_auth;
@@ -1373,7 +1378,7 @@ class CPushMod : public CModule
 
 				// Create the socket connection, write to it, and add it to the queue
 				CPushSocket *sock = new CPushSocket(this);
-				sock->Connect(service_host, use_port, use_ssl);
+				sock->Connect(service_host, use_port, use_ssl, use_bindhost);
 				sock->Request(use_post, service_host, service_url, params, service_auth);
 				AddSocket(sock);
 
@@ -1404,6 +1409,53 @@ class CPushMod : public CModule
 			}
 		}
 };
+
+/**
+ * Establish a connection.
+ *
+ * Overrides CSocket::Connect. Uses custom sBindHost value if provided.
+ */
+bool CPushSocket::Connect(const CString& sHostname, unsigned short uPort, bool bSSL, CString sBindHost, unsigned int uTimeout)
+{
+	if (!m_pModule)
+	{
+		DEBUG("ERROR: CPushSocket::Connect called on instance without m_pModule handle!");
+		return false;
+	}
+
+	CUser* pUser = m_pModule->GetUser();
+	CString sSockName = "MOD::C::" + m_pModule->GetModName();
+	CString sZNCBindHost;
+
+	if (pUser)
+	{
+		sSockName += "::" + pUser->GetUserName();
+		sZNCBindHost = pUser->GetBindHost();
+
+		CIRCNetwork* pNetwork = m_pModule->GetNetwork();
+		if (pNetwork)
+		{
+			sSockName += "::" + pNetwork->GetName();
+			sZNCBindHost = pNetwork->GetBindHost();
+		}
+	}
+
+	// Don't overwrite the socket name if one is already set
+	if (!GetSockName().empty())
+	{
+		sSockName = GetSockName();
+	}
+
+	// Use globally-defined BindHost if a custom (module-specific) one isn't set
+	if ( sBindHost == "" )
+	{
+		sBindHost = sZNCBindHost;
+	}
+	parent->PutDebug("Bound to " + sBindHost);
+
+	m_pModule->GetManager()->Connect(sHostname, uPort, sSockName, uTimeout, bSSL, sBindHost, this);
+	return true;
+}
 
 /**
  * Send an HTTP request.
